@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-!5_rhb19@)rklkzot&k2or6oy7x$q@kcaw)0h-$lid+0!cu$v=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['magiccourage.cloud', '127.0.0.1']
+ALLOWED_HOSTS = ['liutianyu.cloud', '127.0.0.1', 'localhost']
 
 
 # Application definition
