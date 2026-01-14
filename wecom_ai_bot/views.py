@@ -1,14 +1,11 @@
 import json
-import requests
+import requests  # 刚才报错找不到这个
 import time
 from django.http import HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-
-# 导入 wechatpy 核心组件
 from wechatpy.enterprise.crypto import WeChatCrypto
 from wechatpy.enterprise import parse_message
-from wechatpy.exceptions import InvalidSignatureException
 
 # ========== 1. 你的配置信息 (保持与企业微信后台一致) ==========
 CORP_ID = "ww9cd3a415053f3731"  # 截图中的企业ID
