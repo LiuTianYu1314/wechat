@@ -124,7 +124,7 @@ def get_random_meme_path(emotion_tag):
     if not folder_name: return None
 
     base_dir = f"/opt/wechat/meme/{folder_name}"
-    image_files = ["1.webp", "2.webp", "3.webp"]
+    image_files = ["1.jpg", "2.jpg", "3.jpg"]
     selected_file = random.choice(image_files)
     full_path = os.path.join(base_dir, selected_file)
 
