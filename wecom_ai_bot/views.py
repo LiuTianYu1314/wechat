@@ -15,8 +15,8 @@ AGENT_SECRET = "auS9V3PuA41buDdtQalML3SUeNCI2hbnIAQAM1W3NI"
 
 # 【特别注意】：这两个值需要你去企业微信后台“接收消息”设置页面，点击“随机获取”生成
 # 生成后，先填入这里，再点击后台页面的“保存”
-TOKEN = "你自己生成的Token"
-ENCODING_AES_KEY = "你自己生成的43位EncodingAESKey"
+TOKEN = "kuBUhTej42tB2gBixXwGvI38B3ITbj"
+ENCODING_AES_KEY = "Cu5HAH0sWcdaTV4irxBcGgEnfYWnrmIATIF5sNFBUDX"
 
 # 记得关闭模拟模式，否则无法通过企业微信的验证
 SIMULATION_MODE = False
