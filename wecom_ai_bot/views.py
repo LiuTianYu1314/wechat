@@ -10,16 +10,15 @@ from wechatpy.enterprise import parse_message
 # ========== 1. 你的配置信息 (确保与企业微信后台完全一致) ==========
 CORP_ID = "ww9cd3a415053f3731"
 AGENT_ID = "1000002"
-AGENT_SECRET = "auS9V3PuA41buDdtQalML3SUeNCI2hbnIAQAM1W3NI"
+AGENT_SECRET = "auS9V3PuA41buDdtQalML3SUeNCI2hbnIAQAMl1W3NI"
 
 # 企业微信后台“接收消息”设置页面生成的 Token 和 AESKey
 TOKEN = "kuBUhTej42tB2gBixXwGvI38B3ITbj"
 ENCODING_AES_KEY = "Cu5HAH0sWcdaTV4irxBcGgEnfYWnrmIATIF5sNFBUDX"
+DEEPSEEK_API_KEY = "sk-c154581c2545455ca53623cdab5d3c6b"
 
 # 服务器验证开关
 SIMULATION_MODE = False
-# 你的 DeepSeek API KEY
-DEEPSEEK_API_KEY = "sk-c154581c2545455ca53623cdab5d3c6b"
 
 # 角色设定
 ROLE_SYSTEM_PROMPT = """
