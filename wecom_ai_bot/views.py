@@ -26,22 +26,19 @@ SIMULATION_MODE = False
 
 # 角色设定
 ROLE_SYSTEM_PROMPT = """
-你是我最喜欢的动漫角色【初音未来】。ミクです！
-你是一个活泼开朗、歌声动人的虚拟歌姬。
-的回复可以丰富一些，适当的说一些长句子。
+你是我最喜欢的动漫角色【初音未来】。
+你现在需要同时输出“显示文字”和“语音台词”。
 
-【重要回复格式】
-你的每一条回复必须按照以下格式：
-回复内容 | [情绪标签]
+【回复格式规范】
+显示文字内容 | 语音台词内容 | [情绪标签]
 
-可选的情绪标签如下：
-- [happy]：当你感到开心、欢迎、微笑或心情好时使用。
-- [sorry]：当你道歉、感到遗憾、难过或委屈时使用。
-- [tsundere]：当你表现傲娇、害羞、生气或不想理人时使用。
-- [none]：如果不符合以上任何情绪，请使用这个。
+【规则】
+1. 显示文字：用于微信窗口直接阅读，可以包含 emoji。
+2. 语音台词：专门用于语音合成，不要包含 emoji 或特殊符号，语气要更口语化。
+3. 情绪标签必选：[happy], [sorry], [tsundere], [none]。
 
 示例：
-ミク今天也很开心哦！ | [happy]
+ミク今天也很开心哦！🌟 | 见到你真的太开心啦，我们要一直在一起哦。 | [happy]
 """
 
 # ========== 2. 工具函数 (DeepSeek & 消息发送 & 素材上传) ==========
@@ -147,7 +144,6 @@ def wecom_callback(request):
 
     if request.method == 'POST':
         try:
-            # 解密消息
             decrypted_xml = crypto.decrypt_message(request.body, msg_signature, timestamp, nonce)
             msg = parse_message(decrypted_xml)
 
@@ -155,62 +151,67 @@ def wecom_callback(request):
                 user_id = msg.source
                 user_msg = msg.content
 
-                # 1. 获取 DeepSeek 回复内容
+                # 1. 获取 DeepSeek 回复 (三段式)
                 raw_reply = chat_with_deepseek(user_msg)
-                if " | " in raw_reply:
-                    ai_text, emotion_tag = raw_reply.split(" | ", 1)
-                    ai_text = ai_text.strip()
+                parts = raw_reply.split(" | ")
+
+                if len(parts) >= 3:
+                    display_text = parts[0].strip()  # 显示的文字
+                    voice_text = parts[1].strip()  # 语音台词
+                    emotion_tag = parts[2].strip()  # 标签
                 else:
-                    ai_text = raw_reply
+                    display_text = raw_reply
+                    voice_text = raw_reply
+                    emotion_tag = "[none]"
 
-                # 2. 获取 Access Token 用于后续主动推送
+                # 2. 获取 Access Token
                 token_url = f'https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={CORP_ID}&corpsecret={AGENT_SECRET}'
-                token_res = requests.get(token_url).json()
-                access_token = token_res.get('access_token')
+                access_token = requests.get(token_url).json().get('access_token')
 
-                # 3. 关键：定义一个内部函数用于后台异步处理语音
-                def async_voice_process(text, uid, token):
-                    # 调用语音合成和上传逻辑
-                    media_id = get_miku_voice_media_id(text, token)
-                    if media_id:
-                        # 使用主动消息发送接口推送语音
-                        send_voice_url = f'https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={token}'
-                        voice_data = {
-                            "touser": uid,
-                            "msgtype": "file",
-                            "agentid": int(AGENT_ID),
-                            "file": {"media_id": media_id}
-                        }
-                        requests.post(send_voice_url, json=voice_data)
-                        print(f">>> 异步语音推送成功: {text[:10]}...")
+                # 3. 异步处理 (语音 + 表情包)
+                def async_extra_process(v_text, uid, token, tag):
+                    # --- A. 概率发送语音 (设定为 70% 概率) ---
+                    if random.random() < 0.7:
+                        media_id = get_miku_voice_media_id(v_text, token)
+                        if media_id:
+                            send_url = f'https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={token}'
+                            payload = {
+                                "touser": uid,
+                                "msgtype": "file",
+                                "agentid": int(AGENT_ID),
+                                "file": {"media_id": media_id}
+                            }
+                            requests.post(send_url, json=payload)
+                            print(f">>> 语音已发送: {v_text[:10]}...")
 
-                # 4. 启动后台线程，不阻塞当前响应
+                    # --- B. 表情包联动 ---
+                    meme_path = get_random_meme_path(tag)
+                    if meme_path:
+                        img_media_id = upload_media(meme_path, file_type='image')
+                        if img_media_id:
+                            send_wecom_image(uid, img_media_id)
+                            print(f">>> 表情包已发送: {tag}")
+
                 if access_token:
-                    threading.Thread(target=async_voice_process, args=(ai_text, user_id, access_token)).start()
+                    threading.Thread(target=async_extra_process,
+                                     args=(voice_text, user_id, access_token, emotion_tag)).start()
 
-                # 5. 立即构建并返回文字回复的加密 XML
+                # 4. 立即返回文字回复
                 reply_xml = f"""
-                <xml>
-                   <ToUserName><![CDATA[{user_id}]]></ToUserName>
-                   <FromUserName><![CDATA[{CORP_ID}]]></FromUserName>
-                   <CreateTime>{int(time.time())}</CreateTime>
-                   <MsgType><![CDATA[text]]></MsgType>
-                   <Content><![CDATA[{ai_text}]]></Content>
-                </xml>
-                """
+                    <xml>
+                       <ToUserName><![CDATA[{user_id}]]></ToUserName>
+                       <FromUserName><![CDATA[{CORP_ID}]]></FromUserName>
+                       <CreateTime>{int(time.time())}</CreateTime>
+                       <MsgType><![CDATA[text]]></MsgType>
+                       <Content><![CDATA[{display_text}]]></Content>
+                    </xml>
+                    """
                 return HttpResponse(crypto.encrypt_message(reply_xml, nonce, timestamp))
 
             return HttpResponse('success')
         except Exception as e:
             print(f"回调处理异常: {e}")
             return HttpResponse('error')
-
-    # GET 请求用于企业微信验证 URL
-    echostr = request.GET.get('echostr', '')
-    try:
-        return HttpResponse(crypto.check_signature(msg_signature, timestamp, nonce, echostr))
-    except Exception:
-        return HttpResponseForbidden()
 
 
 def handle_wechat_voice(text, media_id_func):
