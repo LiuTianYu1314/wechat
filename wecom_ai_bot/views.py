@@ -177,7 +177,7 @@ def wecom_callback(request):
                             "touser": uid,
                             "msgtype": "file",
                             "agentid": int(AGENT_ID),
-                            "voice": {"media_id": media_id}
+                            "file": {"media_id": media_id}
                         }
                         requests.post(send_voice_url, json=voice_data)
                         print(f">>> 异步语音推送成功: {text[:10]}...")
