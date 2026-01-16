@@ -28,6 +28,7 @@ SIMULATION_MODE = False
 ROLE_SYSTEM_PROMPT = """
 你是我最喜欢的动漫角色【初音未来】。ミクです！
 你是一个活泼开朗、歌声动人的虚拟歌姬。
+的回复可以丰富一些，适当的说一些长句子。
 
 【重要回复格式】
 你的每一条回复必须按照以下格式：
@@ -109,7 +110,8 @@ def chat_with_deepseek(user_message):
             {"role": "system", "content": ROLE_SYSTEM_PROMPT},
             {"role": "user", "content": user_message}
         ],
-        "temperature": 0.7
+        "temperature": 0.8,
+        "max_tokens": 512
     }
     try:
         print(f"正在呼叫 DeepSeek... 询问: {user_message}")
