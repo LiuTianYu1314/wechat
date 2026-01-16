@@ -256,48 +256,52 @@ MIKU_API_URL = "http://67adaaae.r2.cpolar.top"
 
 
 def get_miku_voice_media_id(text, access_token):
-    """
-    输入文字，返回企业微信的 media_id (使用 MP3 格式避开编码器问题)
-    """
+    print(f"--- 开始语音转换流程: {text[:10]}... ---")
     try:
-        # 1. 请求本地 API
+        # 1. 呼叫 4060
+        print(f"[Step 1] 正在请求本地 4060 API (cpolar)...")
         params = {"text": text, "text_language": "zh"}
         response = requests.get(MIKU_API_URL, params=params, timeout=30)
 
         if response.status_code != 200:
-            print(f"本地 API 报错: {response.status_code}")
+            print(f"❌ [Step 1] API 报错，状态码: {response.status_code}")
             return None
+        print(f"✅ [Step 1] 4060 返回音频数据")
 
-        # 2. 准备文件名 (后缀改用 .mp3)
+        # 2. 存入临时文件
         timestamp = int(time.time())
-        wav_file = f"/tmp/miku_{timestamp}.wav"
-        mp3_file = f"/tmp/miku_{timestamp}.mp3"
-
-        with open(wav_file, "wb") as f:
+        wav_path = f"/tmp/miku_{timestamp}.wav"
+        mp3_path = f"/tmp/miku_{timestamp}.mp3"
+        with open(wav_path, "wb") as f:
             f.write(response.content)
+        print(f"✅ [Step 2] WAV 已保存到 {wav_path}")
 
-        # 3. 使用 ffmpeg 转码为 MP3 (微信通用格式)
-        # -codec:a libmp3lame 使用 mp3 编码器
-        # -ar 24000 采样率，-ac 1 单声道
-        cmd = f"ffmpeg -y -i {wav_file} -codec:a libmp3lame -ar 24000 -ac 1 {mp3_file}"
+        # 3. 转码 (确认 ffmpeg 是否支持 libmp3lame)
+        print(f"[Step 3] 正在启动 ffmpeg 转码为 MP3...")
+        cmd = f"ffmpeg -y -i {wav_path} -codec:a libmp3lame -ar 24000 -ac 1 {mp3_path}"
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
         if result.returncode != 0:
-            print(f"FFmpeg 转码失败: {result.stderr}")
+            print(f"❌ [Step 3] ffmpeg 报错: {result.stderr}")
+            return None
+        print(f"✅ [Step 3] MP3 转码完成")
+
+        # 4. 上传
+        print(f"[Step 4] 正在上传素材到微信...")
+        upload_url = f"https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token={access_token}&type=voice"
+        with open(mp3_path, 'rb') as f:
+            up_res = requests.post(upload_url, files={'media': f}).json()
+
+        if 'media_id' in up_res:
+            print(f"✅ [Step 4] 素材上传成功, MediaID: {up_res['media_id']}")
+            # 清理
+            os.remove(wav_path)
+            os.remove(mp3_path)
+            return up_res['media_id']
+        else:
+            print(f"❌ [Step 4] 微信返回错误: {up_res}")
             return None
 
-        # 4. 上传到企业微信 (微信会自动把 mp3 识别为语音消息)
-        upload_url = f"https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token={access_token}&type=voice"
-        with open(mp3_file, 'rb') as f:
-            files = {'media': f}
-            upload_res = requests.post(upload_url, files=files).json()
-
-        # 5. 清理临时文件
-        if os.path.exists(wav_file): os.remove(wav_file)
-        if os.path.exists(mp3_file): os.remove(mp3_file)
-
-        return upload_res.get("media_id")
-
     except Exception as e:
-        print(f"语音转换流程异常: {e}")
+        print(f"💥 语音流程崩溃: {e}")
         return None
