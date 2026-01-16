@@ -175,7 +175,7 @@ def wecom_callback(request):
                         send_voice_url = f'https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={token}'
                         voice_data = {
                             "touser": uid,
-                            "msgtype": "voice",
+                            "msgtype": "file",
                             "agentid": int(AGENT_ID),
                             "voice": {"media_id": media_id}
                         }
@@ -256,18 +256,18 @@ MIKU_API_URL = "http://67adaaae.r2.cpolar.top"
 
 
 def get_miku_voice_media_id(text, access_token):
-    print(f"\n--- 开始语音转换流程: {text[:10]}... ---")
+    print(f"\n--- 开始语音转换流程 (文件模式): {text[:10]}... ---")
     try:
         # 1. 呼叫本地 4060 推理服务器
         print(f"[Step 1] 正在请求本地 4060 API (cpolar)...")
-        # 这里的 MIKU_API_URL 确保是你 cpolar 的最新地址
         params = {"text": text, "text_language": "zh"}
+        # 适当增加超时，给 4060 推理留出时间
         response = requests.get(MIKU_API_URL, params=params, timeout=35)
 
         if response.status_code != 200:
             print(f"❌ [Step 1] API 报错，状态码: {response.status_code}")
             return None
-        print(f"✅ [Step 1] 4060 推理成功，获取到音频流")
+        print(f"✅ [Step 1] 4060 推理成功")
 
         # 2. 存入临时 WAV 文件
         timestamp = int(time.time())
@@ -276,48 +276,42 @@ def get_miku_voice_media_id(text, access_token):
 
         with open(wav_path, "wb") as f:
             f.write(response.content)
-        print(f"✅ [Step 2] WAV 临时文件已保存: {wav_path}")
 
-        # 3. 转码为 MP3 (因为你的 ffmpeg 不支持 AMR 编码器)
-        # 使用 libmp3lame 编码，微信对该格式兼容性极好
+        # 3. 转码为 MP3 (你的 ffmpeg 支持 libmp3lame)
         print(f"[Step 3] 正在启动 ffmpeg 转码为 MP3...")
+        # 采样率调高到 24k 保证音质，单声道减小体积
         cmd = f"ffmpeg -y -i {wav_path} -codec:a libmp3lame -ar 24000 -ac 1 {mp3_path}"
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
         if result.returncode != 0:
             print(f"❌ [Step 3] ffmpeg 转码失败: {result.stderr}")
             return None
-        print(f"✅ [Step 3] MP3 转码完成: {mp3_path}")
+        print(f"✅ [Step 3] MP3 转码完成")
 
-        # 4. 上传素材到微信 (核心：后缀欺骗逻辑)
-        print(f"[Step 4] 正在上传素材到企业微信...")
-        upload_url = f"https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token={access_token}&type=voice"
+        # 4. 上传素材到企业微信 (关键：使用 type=file 绕过 AMR 限制)
+        print(f"[Step 4] 正在作为【文件】上传到微信...")
+        upload_url = f"https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token={access_token}&type=file"
 
         with open(mp3_path, 'rb') as f:
-            # 【重要】虽然内容是 mp3，但文件名强行命名为 .amr，Content-Type 设为 audio/amr
-            # 这样可以绕过微信 301017 错误，同时微信客户端能正常播放该 MP3 内容
+            # 文件名后缀用 .mp3，微信会自动识别为音频文件
             files = {
-                'media': ('miku.amr', f, 'audio/amr')
+                'media': (f'初音未来_{timestamp}.mp3', f, 'audio/mpeg')
             }
             up_res = requests.post(upload_url, files=files).json()
 
         if 'media_id' in up_res:
             media_id = up_res['media_id']
-            print(f"✅ [Step 4] 素材上传成功, MediaID: {media_id}")
+            print(f"✅ [Step 4] 文件上传成功, MediaID: {media_id}")
 
-            # 成功后清理临时文件
-            try:
-                if os.path.exists(wav_path): os.remove(wav_path)
-                if os.path.exists(mp3_path): os.remove(mp3_path)
-                print(f"✅ [Step 5] 临时文件清理完毕")
-            except Exception as e:
-                print(f"⚠️ 清理文件失败: {e}")
+            # 清理临时文件
+            if os.path.exists(wav_path): os.remove(wav_path)
+            if os.path.exists(mp3_path): os.remove(mp3_path)
 
             return media_id
         else:
-            print(f"❌ [Step 4] 微信接口返回错误: {up_res}")
+            print(f"❌ [Step 4] 微信返回错误: {up_res}")
             return None
 
     except Exception as e:
-        print(f"💥 语音流程运行异常: {e}")
+        print(f"💥 语音转换异常: {e}")
         return None
