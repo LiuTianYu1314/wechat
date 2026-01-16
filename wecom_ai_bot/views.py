@@ -256,47 +256,48 @@ MIKU_API_URL = "http://67adaaae.r2.cpolar.top"
 
 
 def get_miku_voice_media_id(text, access_token):
+    """
+    输入文字，返回企业微信的 media_id (使用 MP3 格式避开编码器问题)
+    """
     try:
-        # 1. 增加超时时间到 30 秒，确保长句子推理不中断
-        response = requests.get(MIKU_API_URL, params={"text": text, "text_language": "zh"}, timeout=30)
+        # 1. 请求本地 API
+        params = {"text": text, "text_language": "zh"}
+        response = requests.get(MIKU_API_URL, params=params, timeout=30)
 
-        if response.status_code != 200 or not response.content:
-            print(f"API 请求失败或内容为空: {response.status_code}")
+        if response.status_code != 200:
+            print(f"本地 API 报错: {response.status_code}")
             return None
 
+        # 2. 准备文件名 (后缀改用 .mp3)
         timestamp = int(time.time())
         wav_file = f"/tmp/miku_{timestamp}.wav"
-        amr_file = f"/tmp/miku_{timestamp}.mp3"
+        mp3_file = f"/tmp/miku_{timestamp}.mp3"
 
-        # 2. 写入文件并强制刷新到磁盘
         with open(wav_file, "wb") as f:
             f.write(response.content)
-            f.flush()
-            os.fsync(f.fileno())
 
-        # 3. 检查文件是否真的存在且有内容
-        if not os.path.exists(wav_file) or os.path.getsize(wav_file) == 0:
-            print("WAV 文件生成失败，ffmpeg 无法处理")
-            return None
-
-        # 4. 转码 (增加 -y 覆盖参数)
-        cmd = f"ffmpeg -y -i {wav_file} -ar 8000 -ab 12.2k -ac 1 {amr_file}"
+        # 3. 使用 ffmpeg 转码为 MP3 (微信通用格式)
+        # -codec:a libmp3lame 使用 mp3 编码器
+        # -ar 24000 采样率，-ac 1 单声道
+        cmd = f"ffmpeg -y -i {wav_file} -codec:a libmp3lame -ar 24000 -ac 1 {mp3_file}"
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
         if result.returncode != 0:
-            print(f"FFmpeg 报错日志: {result.stderr}")
+            print(f"FFmpeg 转码失败: {result.stderr}")
             return None
 
-        # 5. 上传至微信
+        # 4. 上传到企业微信 (微信会自动把 mp3 识别为语音消息)
         upload_url = f"https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token={access_token}&type=voice"
-        with open(amr_file, 'rb') as f:
-            upload_res = requests.post(upload_url, files={'media': f}).json()
+        with open(mp3_file, 'rb') as f:
+            files = {'media': f}
+            upload_res = requests.post(upload_url, files=files).json()
 
-        # 清理
-        for f in [wav_file, amr_file]:
-            if os.path.exists(f): os.remove(f)
+        # 5. 清理临时文件
+        if os.path.exists(wav_file): os.remove(wav_file)
+        if os.path.exists(mp3_file): os.remove(mp3_file)
 
         return upload_res.get("media_id")
+
     except Exception as e:
-        print(f"语音流程异常: {e}")
+        print(f"语音转换流程异常: {e}")
         return None
