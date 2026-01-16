@@ -266,7 +266,7 @@ def get_miku_voice_media_id(text, access_token):
 
         timestamp = int(time.time())
         wav_file = f"/tmp/miku_{timestamp}.wav"
-        amr_file = f"/tmp/miku_{timestamp}.amr"
+        amr_file = f"/tmp/miku_{timestamp}.mp3"
 
         # 2. 写入文件并强制刷新到磁盘
         with open(wav_file, "wb") as f:
